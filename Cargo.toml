@@ -1,7 +1,13 @@
 [package]
 name = "mmc5983ma"
-version = "0.1.0"
+version = "0.1.0-rc1"
 edition = "2021"
+description = "Async driver for the mmc5983ma"
+authors = ["John Schmidt <john@john2143.com>"]
+license = "MIT"
+repository = "https://github.com/John2143/mmc5983ma"
+readme = "README.md"
+keywords = ["embedded", "embedded-hal", "embedded-hal-async", "async", "no_std", "mmc5983", "mmc5983ma", "magnetometer", "i2c"]
 
 [features]
 default = []

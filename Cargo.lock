@@ -63,7 +63,7 @@ dependencies = [
 
 [[package]]
 name = "mmc5983ma"
-version = "0.1.0"
+version = "0.1.0-rc1"
 dependencies = [
  "bitfield",
  "defmt",
