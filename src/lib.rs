@@ -2,12 +2,16 @@
 use bitfield::bitfield;
 use embedded_hal_async::{delay::DelayNs, i2c::I2c};
 
-pub struct MMC5983<I2C, D> where I2C: I2c, D: DelayNs  {
+pub struct MMC5983<I2C, D>
+where
+    I2C: I2c,
+    D: DelayNs,
+{
     i2c: I2C,
     address: u8,
     delay: D,
     // This contains the prd and cmm bits which is a write-only register
-    control_reg0b: ControlReg0b
+    control_reg0b: ControlReg0b,
 }
 
 bitfield! {
@@ -81,13 +85,13 @@ bitfield! {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum ContinuousMeasurementFreq {
-    Off    = 0b000,
-    Hz1    = 0b001,
-    Hz10   = 0b010,
-    Hz20   = 0b011,
-    Hz50   = 0b100,
-    Hz100  = 0b101,
-    Hz200  = 0b110,
+    Off = 0b000,
+    Hz1 = 0b001,
+    Hz10 = 0b010,
+    Hz20 = 0b011,
+    Hz50 = 0b100,
+    Hz100 = 0b101,
+    Hz200 = 0b110,
     Hz1000 = 0b111,
 }
 
@@ -167,7 +171,11 @@ pub struct MeasurementRaw<T> {
 
 const MAX_LOOPS: usize = 100;
 
-impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
+impl<I2C, D> MMC5983<I2C, D>
+where
+    I2C: I2c,
+    D: DelayNs,
+{
     pub fn new(i2c: I2C, delay_driver: D, address: u8) -> Self {
         MMC5983 {
             i2c,
@@ -179,7 +187,9 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
 
     pub async fn read_register(&mut self, register: u8) -> Result<u8, I2C::Error> {
         let mut data = [0u8];
-        self.i2c.write_read(self.address, &[register], &mut data).await?;
+        self.i2c
+            .write_read(self.address, &[register], &mut data)
+            .await?;
         Ok(data[0])
     }
 
@@ -200,12 +210,16 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         Ok(())
     }
 
-    pub async fn set_cmm_mode(&mut self, freq: ContinuousMeasurementFreq, period: PeriodicSetInterval) -> Result<(), I2C::Error> {
+    pub async fn set_cmm_mode(
+        &mut self,
+        freq: ContinuousMeasurementFreq,
+        period: PeriodicSetInterval,
+    ) -> Result<(), I2C::Error> {
         let mut reg = ControlReg0b(0);
         match freq {
             ContinuousMeasurementFreq::Off => {
                 reg.set_cmm_en(false);
-            },
+            }
             _ => {
                 reg.set_cm_freq(freq as u8);
                 reg.set_cmm_en(true);
@@ -214,7 +228,7 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         match period {
             PeriodicSetInterval::Off => {
                 reg.set_en_prd_set(false);
-            },
+            }
             _ => {
                 reg.set_prd_set(period as u8);
                 reg.set_en_prd_set(true);
@@ -229,7 +243,10 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         // Read the device ID
         let device_id = self.read_register(0x2F).await?;
         if device_id != 0b00110000 {
-            panic!("Invalid device ID: 0x{:02X}, are you sure this is an mmc5983ma", device_id);
+            panic!(
+                "Invalid device ID: 0x{:02X}, are you sure this is an mmc5983ma",
+                device_id
+            );
         }
 
         self.reset().await?;
@@ -246,7 +263,8 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         reg.set_spi_3w_en(false);
         self.set_register(0x0c, reg.0).await?;
 
-        self.set_cmm_mode(ContinuousMeasurementFreq::Off, PeriodicSetInterval::Off).await?;
+        self.set_cmm_mode(ContinuousMeasurementFreq::Off, PeriodicSetInterval::Off)
+            .await?;
 
         // 50hz = 20ms
         self.delay.delay_ms(21).await;
@@ -255,28 +273,32 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
     }
 
     // Read: 16 bit
-    pub async unsafe fn read_raw_measurement_16(&mut self) -> Result<MeasurementRaw<u16>, I2C::Error> {
+    pub async unsafe fn read_raw_measurement_16(
+        &mut self,
+    ) -> Result<MeasurementRaw<u16>, I2C::Error> {
         let mut data = [0u8; 6];
-        self.i2c.write_read(self.address, &[0x00], &mut data).await?;
+        self.i2c
+            .write_read(self.address, &[0x00], &mut data)
+            .await?;
         let x = (data[0] as u16) << 16 | (data[1] as u16) << 8;
         let y = (data[2] as u16) << 16 | (data[3] as u16) << 8;
         let z = (data[4] as u16) << 16 | (data[5] as u16) << 8;
-        return Ok( MeasurementRaw {
-            x, y, z
-        });
+        return Ok(MeasurementRaw { x, y, z });
     }
 
     // Read: 18 bit
-    pub async unsafe fn read_raw_measurement_18(&mut self) -> Result<MeasurementRaw<u32>, I2C::Error> {
+    pub async unsafe fn read_raw_measurement_18(
+        &mut self,
+    ) -> Result<MeasurementRaw<u32>, I2C::Error> {
         let mut data = [0u8; 7];
-        self.i2c.write_read(self.address, &[0x00], &mut data).await?;
+        self.i2c
+            .write_read(self.address, &[0x00], &mut data)
+            .await?;
         let xyzout2 = XYZOut2(data[6]);
         let x = (data[0] as u32) << 18 | (data[1] as u32) << 10 | xyzout2.get_xout() as u32;
         let y = (data[2] as u32) << 18 | (data[3] as u32) << 10 | xyzout2.get_yout() as u32;
         let z = (data[4] as u32) << 18 | (data[5] as u32) << 10 | xyzout2.get_zout() as u32;
-        return Ok( MeasurementRaw {
-            x, y, z
-        });
+        return Ok(MeasurementRaw { x, y, z });
     }
 
     pub async fn do_measurement_raw(&mut self) -> Result<MeasurementRaw<u32>, I2C::Error> {
@@ -370,5 +392,4 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         let range = (125.0 - -75.0) / 256.0;
         Ok(temp_raw.map(|temp_raw| (temp_raw as f32) * range + -75.0))
     }
-
 }
