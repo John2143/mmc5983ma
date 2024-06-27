@@ -51,8 +51,16 @@ bitfield! {
     get_otp_read, set_otp_read: 6;
 }
 
+// TODO
+enum OutputResolution {
+    Hz100 = 0b00,
+    Hz200 = 0b01,
+    Hz400 = 0b10,
+    Hz800 = 0b11,
+}
+
 bitfield! {
-    struct ControlReg0a(u8);
+    pub struct ControlReg0a(u8);
     /// "Output Resolution"
     /// 00: 8ms (100Hz)
     /// 01: 4ms (200Hz)
@@ -69,8 +77,37 @@ bitfield! {
     get_sw_rst, set_sw_rst: 7;
 }
 
+// TODO
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum ContinuousMeasurementFreq {
+    Off    = 0b000,
+    Hz1    = 0b001,
+    Hz10   = 0b010,
+    Hz20   = 0b011,
+    Hz50   = 0b100,
+    Hz100  = 0b101,
+    Hz200  = 0b110,
+    Hz1000 = 0b111,
+}
+
+// TODO
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum PeriodicSetInterval {
+    Per1 = 0b000,
+    Per25 = 0b001,
+    Per75 = 0b010,
+    Per100 = 0b011,
+    Per250 = 0b100,
+    Per500 = 0b101,
+    Per1000 = 0b110,
+    Per2000 = 0b111,
+    Off,
+}
+
 bitfield! {
-    struct ControlReg0b(u8);
+    pub struct ControlReg0b(u8);
     /// These bits determine how often the chip will take measurements in Continuous
     /// Measurement Mode. The frequency is based on the assumption that BW[1:0] = 00.
     ///
@@ -107,7 +144,7 @@ bitfield! {
 }
 
 bitfield! {
-    struct ControlReg0c(u8);
+    pub struct ControlReg0c(u8);
     /// Writing “1” will apply an extra current flowing from the positive end to the negative end
     /// of an internal coil and result in an extra magnetic field. This feature can be used to
     /// check whether the sensor has been saturated
@@ -140,13 +177,13 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         }
     }
 
-    async fn read_register(&mut self, register: u8) -> Result<u8, I2C::Error> {
+    pub async fn read_register(&mut self, register: u8) -> Result<u8, I2C::Error> {
         let mut data = [0u8];
         self.i2c.write_read(self.address, &[register], &mut data).await?;
         Ok(data[0])
     }
 
-    async fn set_register(&mut self, register: u8, data: u8) -> Result<(), I2C::Error> {
+    pub async fn set_register(&mut self, register: u8, data: u8) -> Result<(), I2C::Error> {
         if register == 0x0b {
             self.control_reg0b = ControlReg0b(data);
         }
@@ -163,21 +200,28 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         Ok(())
     }
 
-    pub async fn cmm_enable(&mut self) -> Result<(), I2C::Error> {
+    pub async fn set_cmm_mode(&mut self, freq: ContinuousMeasurementFreq, period: PeriodicSetInterval) -> Result<(), I2C::Error> {
         let mut reg = ControlReg0b(0);
-        // Continuous measurement mode on
-        reg.set_cm_freq(0b100);
-        reg.set_cmm_en(true);
-        // Periodic set
-        reg.set_prd_set(0b111);
-        reg.set_en_prd_set(true);
+        match freq {
+            ContinuousMeasurementFreq::Off => {
+                reg.set_cmm_en(false);
+            },
+            _ => {
+                reg.set_cm_freq(freq as u8);
+                reg.set_cmm_en(true);
+            }
+        }
+        match period {
+            PeriodicSetInterval::Off => {
+                reg.set_en_prd_set(false);
+            },
+            _ => {
+                reg.set_prd_set(period as u8);
+                reg.set_en_prd_set(true);
+            }
+        }
+
         self.set_register(0x0b, reg.0).await?;
-
-        let mut reg = ControlReg09(0);
-        reg.set_auto_sr_en(true);
-        //reg.set_tm_m(true);
-        self.set_register(0x09, reg.0).await?;
-
         Ok(())
     }
 
@@ -202,7 +246,7 @@ impl<I2C, D> MMC5983<I2C, D> where I2C: I2c, D: DelayNs {
         reg.set_spi_3w_en(false);
         self.set_register(0x0c, reg.0).await?;
 
-        self.cmm_enable().await?;
+        self.set_cmm_mode(ContinuousMeasurementFreq::Off, PeriodicSetInterval::Off).await?;
 
         // 50hz = 20ms
         self.delay.delay_ms(21).await;
