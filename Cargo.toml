@@ -1,0 +1,14 @@
+[package]
+name = "mmc5983ma"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+defmt = ["dep:defmt"]
+float = []
+
+[dependencies]
+bitfield = "0.15.0"
+defmt = { version = "0.3.8", "optional" = true }
+embedded-hal-async = "1.0.0"
